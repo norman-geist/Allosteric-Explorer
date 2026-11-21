@@ -8,8 +8,6 @@
 
 Allosteric Explorer is a local Python application with a browser interface for structural and trajectory analysis. It connects pocket discovery, residue communication networks, conformational analysis, and elastic-network perturbation responses in one workspace. Structures and trajectories are processed on the machine running the backend. The 3D viewer and visual assets are bundled for offline use after installation.
 
-**Author:** Norman Geist · University of Greifswald, Institute of Biochemistry
-
 ## What you can do
 
 | Tab | Analyses |
@@ -73,5 +71,3 @@ Suggested software reference: Geist N. *Allosteric Explorer*. Version 1.0.0. htt
 ## Licensing and credits
 
 A license for the project's original source has not yet been selected. Bundled third-party components retain their own notices: [3Dmol.js](static/vendor/3Dmol-LICENSE), [additional bundled notices](static/vendor/3Dmol-min.js.LICENSE.txt), and [DM Sans](static/vendor/DM-Sans-OFL.txt).
-
-The banner and logo are illustrative; they do not depict analysis results.
