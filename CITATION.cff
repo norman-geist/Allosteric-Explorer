@@ -1,0 +1,19 @@
+cff-version: 1.2.0
+message: "Please cite Allosteric Explorer and the underlying methods and libraries used in your analysis. Record the exact release or commit."
+type: software
+title: Allosteric Explorer
+authors:
+  - family-names: Geist
+    given-names: Norman
+    affiliation: "University of Greifswald, Institute of Biochemistry"
+version: 1.0.0
+repository-code: "https://github.com/norman-geist/Allosteric-Explorer"
+url: "https://github.com/norman-geist/Allosteric-Explorer"
+abstract: "Local application for protein pocket discovery, residue communication networks, conformational analysis, and elastic-network perturbation-response scanning."
+keywords:
+  - proteins
+  - allostery
+  - molecular dynamics
+  - fpocket
+  - principal component analysis
+  - perturbation response scanning

@@ -1,0 +1,1186 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Allosteric Explorer</title>
+    <link rel="icon" type="image/png" href="/assets/branding/app-logo.png" />
+    <link rel="apple-touch-icon" href="/assets/branding/app-logo.png" />
+    <script defer src="/assets/branding.js"></script>
+    <link rel="stylesheet" href="/assets/style.css" />
+    <script defer src="/assets/vendor/3Dmol-min.js"></script>
+    <script defer src="/assets/plots.js"></script>
+    <script defer src="/assets/scenes.js"></script>
+    <script defer src="/assets/conformation-diagnostics.js"></script>
+    <script defer src="/assets/conformations.js"></script>
+    <script defer src="/assets/mechanism.js"></script>
+    <script defer src="/assets/selections.js"></script>
+    <script defer src="/assets/polish.js"></script>
+    <script defer src="/assets/app.js"></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <img class="brand-logo" src="/assets/branding/app-logo.png" width="40" height="40" alt="" />
+        <span>Allosteric Explorer</span>
+      </div>
+      <div class="header-tools">
+        <span class="local"><i></i> Protein analysis workspace</span>
+        <button id="openAbout" type="button" class="banner-toggle">About</button>
+        <button id="toggleBrandBanner" class="banner-toggle" type="button" aria-controls="brandBannerVisual" aria-expanded="true">Hide banner</button>
+      </div>
+    </header>
+    <div id="exportFeedback" class="export-feedback" hidden>
+      <span id="exportFeedbackMessage" role="status"></span>
+      <button id="exportSaveAs" type="button" hidden>Save as…</button>
+      <button id="dismissExportFeedback" type="button" aria-label="Dismiss export message">×</button>
+    </div>
+    <main>
+      <div class="intro">
+        <div>
+          <h2 class="workspace-title">Analysis workspace</h2>
+          <p>From candidate sites to conformational mechanisms.</p>
+        </div>
+        <div class="actions">
+          <button id="clearWorkspace" type="button" title="Reset the workspace and analysis settings">Clear</button><button
+            class="primary"
+            type="button"
+            id="uploadLabel"
+            ><span aria-hidden="true">↑</span> Open PDB</button><input
+            id="upload"
+            class="file-input"
+            type="file"
+            accept=".pdb,.ent"
+          />
+          <button id="uploadLocal" type="button" hidden>Upload PDB</button>
+          <details id="computeSettings" class="compute-settings">
+            <summary aria-label="Global settings" title="Global settings"><span aria-hidden="true">⚙︎</span></summary>
+            <div class="global-settings-fields">
+              <label for="cpuWorkers" title="Maximum simultaneous workers per fpocket tracking or SASA run. Use 1 for sequential execution.">CPU workers</label>
+              <input id="cpuWorkers" type="number" min="1" max="100" value="4" required />
+              <label for="pngDpi" title="Resolution for exported plot and 3D PNGs. SVG remains scalable.">PNG export DPI</label>
+              <select id="pngDpi">
+                <option value="96">96</option>
+                <option value="150">150</option>
+                <option value="300" selected>300</option>
+                <option value="600">600</option>
+              </select>
+            </div>
+          </details>
+        </div>
+      </div>
+      <section id="brandBanner" class="brand-banner" aria-label="Analysis workflow and molecular illustration">
+        <img class="brand-banner-art" data-banner-panel="pockets" src="/assets/branding/pockets-banner.png" width="2172" height="724" alt="" fetchpriority="high" />
+        <img class="brand-banner-art" data-banner-panel="communication" src="/assets/branding/molecular-banner.png" width="2172" height="724" alt="" hidden />
+        <img class="brand-banner-art" data-banner-panel="conformations" src="/assets/branding/conformations-banner.png" width="2172" height="724" alt="" hidden />
+        <img class="brand-banner-art" data-banner-panel="perturbation" src="/assets/branding/perturbation-banner.png" width="2172" height="724" alt="" hidden />
+        <div id="brandBannerVisual" class="brand-banner-copy">
+          <p id="brandSection" class="brand-eyebrow">Pocket discovery</p>
+          <h1 id="brandTitle">Allosteric Explorer</h1>
+          <p id="brandDescription" class="brand-tagline">Discover cavities and explore candidate binding sites.</p>
+        </div>
+      <nav class="workflow-tabs" aria-label="Analysis workflow">
+        <button
+          class="step active"
+          id="pocketTab"
+          aria-controls="pocketPanel"
+          aria-current="step"
+        >
+          <span>1</span> Pocket discovery
+        </button>
+        <button class="step" id="commTab" aria-controls="commPanel">
+          <span>2</span> Communication
+        </button>
+        <button
+          class="step"
+          id="conformationTab"
+          aria-controls="conformationPanel"
+        >
+          <span>3</span> Conformations
+        </button>
+        <button class="step" id="perturbationTab" aria-controls="perturbationPanel"><span>4</span> Perturbation</button>
+      </nav>
+      </section>
+      <div id="notice" role="status" hidden></div>
+      <div id="taskProgress" class="task-progress" role="status" hidden><span class="activity-dot" aria-hidden="true"></span><span id="taskElapsed"></span><small>Stage counts apply to the current step; some solver steps have no frame counter.</small></div>
+      <div id="analysisContext" class="analysis-context" hidden></div>
+      <aside id="analysisEmptyState" class="analysis-empty-state"><strong id="emptyStateTitle">Discover candidate pockets</strong><p id="emptyStateDescription">Open a PDB to start.</p></aside>
+      <div class="workspace">
+        <section class="viewer-card" aria-label="Molecular viewer">
+          <div class="viewer-toolbar">
+            <div>
+              <strong id="structureName">Structure</strong><small id="structureMeta">Open a PDB to get started</small>
+            </div>
+            <div class="actions compact">
+              <button
+                id="reset"
+                type="button"
+                title="Reset rotation, pan and zoom"
+              >
+                Reset view
+              </button>
+            </div>
+          </div>
+          <details id="viewerDisplay" class="viewer-display">
+            <summary>Display and export</summary>
+            <fieldset class="viewer-design">
+              <legend>Protein</legend>
+              <label for="style">Representation</label>
+              <select id="style">
+                <option value="cartoon">Cartoon</option>
+                <option value="surface">Surface</option>
+                <option value="stick">Sticks</option>
+                <option value="cartoon-surface">Cartoon + surface</option>
+              </select>
+              <label for="viewerColor">Color by</label>
+              <select id="viewerColor">
+                <option value="chain">Chain / segment</option>
+                <option value="coupling" hidden disabled>Signed correlation to Region A</option>
+                <option value="response" hidden disabled>PRS response</option>
+              </select>
+              <div id="correlationScaleControls" class="correlation-scale" hidden>
+                <label for="negativeCorrelationLimit">Full blue at r</label>
+                <input id="negativeCorrelationLimit" type="range" min="0.05" max="1" step="0.05" value="1"
+                  title="Move toward zero to emphasize negative correlations. Values at or below the displayed negative limit are fully blue." />
+                <output id="negativeCorrelationValue" for="negativeCorrelationLimit">−1.00</output>
+                <label for="positiveCorrelationLimit">Full red at r</label>
+                <input id="positiveCorrelationLimit" type="range" min="0.05" max="1" step="0.05" value="1"
+                  title="Move toward zero to emphasize positive correlations. Values at or above this limit are fully red." />
+                <output id="positiveCorrelationValue" for="positiveCorrelationLimit">+1.00</output>
+                <button id="resetCorrelationScale" type="button">Reset scale</button>
+              </div>
+              <div id="prsScaleControls" class="correlation-scale prs-scale" hidden>
+                <label for="prsResponseLimit">Full red at</label>
+                <input id="prsResponseLimit" type="range" min="1" max="100" step="1" value="100"
+                  aria-valuetext="100% of the maximum displayed response"
+                  title="Set full red as a percentage of the maximum response in the displayed responder selection. Lower this to reveal weaker responses; values above the limit saturate at red. Colors only: scores, plots, and rankings stay unchanged. The scale follows the displayed push and responder scope." />
+                <output id="prsResponseValue" for="prsResponseLimit">100% of max</output>
+                <button id="resetPrsScale" type="button">Reset scale</button>
+              </div>
+              <div id="surfaceTransparencyControl" class="surface-transparency" hidden>
+                <label for="surfaceTransparency">Surface transparency</label>
+                <input id="surfaceTransparency" type="range" min="0" max="100" value="56"
+                  aria-valuetext="56% transparent" disabled />
+                <output id="surfaceTransparencyValue" for="surfaceTransparency">56%</output>
+              </div>
+            </fieldset>
+            <fieldset class="viewer-design viewer-overlays">
+              <legend>Overlays</legend>
+              <label><input id="showStructuralIons" type="checkbox" checked /> Retained ions</label>
+              <label><input id="ionLabels" type="checkbox" checked /> Ion labels</label>
+              <label><input id="pocketLining" type="checkbox" checked /> Pocket lining sticks</label>
+              <label><input id="pocketBeads" type="checkbox" checked /> fpocket beads</label>
+              <label><input id="pocketResidueLabels" type="checkbox" /> Pocket residue labels</label>
+              <label><input id="residueLabels" type="checkbox" checked /> Highlighted residue labels</label>
+              <label id="referenceLiningControl" hidden><input id="showReferenceLining" type="checkbox" checked /> Show reference lining</label>
+            </fieldset>
+            <div class="viewer-export">
+              <label for="viewerBackground">Background</label>
+              <select id="viewerBackground">
+                <option value="dark">Dark</option>
+                <option value="white">White</option>
+              </select>
+              <button type="button" id="exportScenePng" disabled>Save PNG</button>
+              <button type="button" id="exportSceneVmd">Export VMD</button>
+              <button type="button" id="exportScenePymol">Export PyMOL</button>
+            </div>
+            <small id="sceneExportStatus" class="frame-action-status" role="status" hidden></small>
+          </details>
+          <div class="viewport">
+            <div
+              id="molecule"
+              aria-label="Interactive 3D protein structure"
+            ></div>
+            <div id="viewError" hidden></div>
+            <div id="emptyScene">Open a PDB to begin</div>
+            <div id="viewKey" class="view-key"></div>
+            <div class="view-help">
+              Drag to rotate <b>·</b> Scroll to zoom <b>·</b> Shift + drag to
+              pan
+            </div>
+          </div>
+          <div class="inspection-tools">
+            <label for="pickAction">Click action</label>
+            <select id="pickAction">
+              <option value="inspect">Inspect residue</option><option value="highlight">Highlight residues</option>
+              <option value="a">Select Region A</option><option value="b">Select Region B</option><option value="functional">Select functional reference</option>
+              <option value="prs-source">Select PRS sources</option><option value="prs-target">Select PRS monitored region</option>
+            </select>
+            <label><input type="checkbox" id="appendPick" checked /> Add to selection</label>
+            <small id="atomInspection" role="status">Hover for residue, chain and segid. Click to inspect or select.</small>
+          </div>
+          <form id="highlightForm" class="highlight-form">
+            <div>
+              <label for="highlights"
+                ><span class="gold-dot"></span> Highlight residues</label><small>IDs or Boolean selections · hover atoms for identity</small>
+            </div>
+            <div class="highlight-controls">
+              <input
+                id="highlights"
+                placeholder="segid PROA and resid 40:60"
+              /><button id="applyHighlight" type="submit">Highlight</button><button id="clearHighlight" type="button">Clear</button>
+            </div>
+            <small id="highlightStatus" aria-live="polite"></small>
+          </form>
+        </section>
+        <section
+          id="pocketPanel"
+          class="side-card"
+          aria-labelledby="pocketHeading"
+        >
+          <div class="panel-head">
+            <div>
+              <h2 id="pocketHeading">
+                Detected pockets <span id="pocketCount" class="count">0</span>
+              </h2>
+              <p id="pocketSource">fpocket cavity predictions</p>
+            </div>
+            <button id="detect" class="primary" type="submit" form="pocketForm">
+              Detect pockets
+            </button>
+          </div>
+          <form id="pocketForm" class="comm-form">
+            <div class="comm-field">
+              <label for="pocketChain" data-help="Scan the full complex to retain inter-chain interfaces. Scanning one chain removes the other chains from fpocket's input and can expose cavities covered in the complex.">Scan</label>
+              <select id="pocketChain">
+                <option value="all">All chains together</option>
+              </select>
+            </div>
+            <details id="pocketSettings">
+              <summary>Advanced pocket detection settings</summary>
+              <div class="field-grid">
+                <div class="comm-field">
+                  <label for="pocketMinRadius" data-help="Minimum alpha-sphere radius. Lower it to include tighter interstices. Blank uses fpocket's default.">Min. radius (Å)</label>
+                  <input id="pocketMinRadius" type="number" min="0.1" max="100" step="any" placeholder="3.4" />
+                </div>
+                <div class="comm-field">
+                  <label for="pocketMaxRadius" data-help="Maximum alpha-sphere radius. Raise it to include wider, shallower depressions. Blank uses fpocket's default.">Max. radius (Å)</label>
+                  <input id="pocketMaxRadius" type="number" min="0.1" max="100" step="any" placeholder="6.2" />
+                </div>
+                <div class="comm-field">
+                  <label for="pocketMinSpheres" data-help="Minimum number of alpha spheres in a retained pocket. Lower it to keep smaller cavities. Blank uses fpocket's default.">Min. spheres per pocket</label>
+                  <input id="pocketMinSpheres" type="number" min="1" max="10000" step="1" placeholder="15" />
+                </div>
+                <div class="comm-field">
+                  <label for="pocketClusteringDistance" data-help="Cuts the alpha-sphere clustering tree at this distance. Lower values tend to split nearby subpockets. Higher values tend to group them. Blank uses fpocket's default (2.4 Å).">Clustering distance (Å)</label>
+                  <input id="pocketClusteringDistance" type="number" min="0.1" max="100" step="any" placeholder="2.4" />
+                </div>
+                <div class="comm-field">
+                  <label for="pocketClusteringMethod" data-help="Single linkage joins clusters by their closest spheres, so a thin bridge can connect two lobes. Complete linkage uses the farthest pair and favors compact clusters. Average linkage uses the mean pair distance, and centroid linkage compares cluster centers.">Clustering method</label>
+                  <select id="pocketClusteringMethod">
+                    <option value="">fpocket default (single linkage)</option>
+                    <option value="s">Single linkage</option>
+                    <option value="m">Complete linkage</option>
+                    <option value="a">Average linkage</option>
+                    <option value="c">Centroid linkage</option>
+                  </select>
+                </div>
+              </div>
+            </details>
+          </form>
+          <p id="pocketPreviewStatus" class="empty" role="status" hidden></p>
+          <div class="pocket-controls" id="pocketVisibility">
+            <span id="pocketVisibilityLabel">Visibility</span>
+            <div>
+              <button id="showAll" type="button">Show all</button><button id="hideAll" type="button">Hide all</button>
+            </div>
+          </div>
+          <div class="pocket-table" id="pocketList"></div>
+          <div class="pocket-table" id="previewPocketList" hidden></div>
+          <div id="pocketDetail" class="pocket-detail"></div>
+          <form id="pocketTrackingForm" class="comm-form" hidden>
+            <details>
+              <summary>Pocket occupancy and volume</summary>
+              <div class="comm-field">
+                <label for="pocketTrackTopology">Topology path</label>
+                <div class="path-field">
+                  <input id="pocketTrackTopology" required />
+                  <button type="button" data-browse="pocketTrackTopology" data-file-type="topology" data-other="pocketTrackTrajectory" hidden>Browse…</button>
+                </div>
+              </div>
+              <div class="comm-field">
+                <label for="pocketTrackTrajectory">Trajectory path</label>
+                <div class="path-field">
+                  <input id="pocketTrackTrajectory" required />
+                  <button type="button" data-browse="pocketTrackTrajectory" data-file-type="trajectory" data-other="pocketTrackTopology" hidden>Browse…</button>
+                </div>
+              </div>
+              <div class="comm-field">
+                <label for="pocketTrackSelection">Topology selection</label>
+                <input id="pocketTrackSelection" value="protein" required />
+              </div>
+              <div class="field-grid">
+                <div class="comm-field">
+                  <label for="pocketTrackStride" data-help="Keep every nth saved frame, starting at frame 0. Use 1 to let Maximum snapshots spread the sample across the trajectory.">Frame stride</label>
+                  <input id="pocketTrackStride" type="number" min="1" max="1000000" value="1" required />
+                </div>
+                <div class="comm-field">
+                  <label for="pocketTrackMax" data-help="Cap the sample after stride. If the cap binds, spread the snapshots across the strided list. The original PDB is shown separately.">Maximum snapshots</label>
+                  <input id="pocketTrackMax" type="number" min="1" max="1000" value="30" required />
+                </div>
+                <div class="comm-field">
+                  <label for="pocketTrackOverlap" data-help="Jaccard overlap of the reference and frame lining residues. The detected cavity with the largest overlap is used if it meets this threshold.">Minimum lining overlap</label>
+                  <input id="pocketTrackOverlap" type="number" min="0.01" max="1" step="0.01" value="0.30" required />
+                </div>
+              </div>
+              <small id="pocketTrackFrameCount" role="status">Select a topology and trajectory to see the frame count.</small>
+              <small id="pocketTrackCount" role="status">Show the pockets you want to track.</small>
+              <div class="result-buttons">
+                <button id="copyPocketTrackingInputs" type="button">Use Communication inputs</button>
+                <button id="trackPocket" type="submit" class="primary">Track visible pockets</button>
+              </div>
+            </details>
+          </form>
+        </section>
+        <section
+          id="commPanel"
+          class="side-card"
+          hidden
+          aria-labelledby="commHeading"
+        >
+          <div class="panel-head">
+            <div>
+              <h2 id="commHeading">Communication</h2>
+              <p>Ensemble coupling and contact paths</p>
+            </div>
+          </div>
+          <form id="commForm" class="comm-form">
+            <div class="field-grid">
+              <div class="comm-field">
+                <label
+                  for="roleA"
+                  data-help="Starting residues for coupling scores and network paths. Dynamic cross-correlation aligns frames on the Cα atoms outside this region."
+                  >Region A</label>
+                <select id="roleA" required></select>
+              </div>
+              <div class="comm-field">
+                <label
+                  for="roleB"
+                  data-help="Optional path endpoints. With no Region B, the app ranks residues outside Region A and lets you inspect paths to them."
+                  >Region B</label>
+                <select id="roleB"></select>
+              </div>
+            </div>
+            
+            <div id="regionCustom"></div>
+            <div class="comm-field">
+              <label
+                for="topology"
+                data-help="Defines the atoms, residue identities and ordering used to read the trajectory. Use the PSF or other topology file that matches the trajectory."
+                >Topology path</label>
+              <div class="path-field">
+                <input
+                  id="topology"
+                  required
+                  placeholder="/path/to/system.psf"
+                />
+                <button
+                  type="button"
+                  hidden
+                  data-browse="topology"
+                  aria-label="Browse for topology"
+                >
+                  Browse…
+                </button>
+              </div>
+            </div>
+            <div class="comm-field">
+              <label
+                for="trajectory"
+                data-help="Supplies the coordinate frames used to estimate correlations and contact occupancy. Its atom order must match the topology."
+                >Trajectory path</label>
+              <div class="path-field">
+                <input
+                  id="trajectory"
+                  required
+                  placeholder="/path/to/merged.dcd"
+                />
+                <button
+                  type="button"
+                  hidden
+                  data-browse="trajectory"
+                  aria-label="Browse for trajectory"
+                >
+                  Browse…
+                </button>
+              </div>
+            </div>
+            <div class="comm-field">
+                <label
+                  for="method"
+                  data-help="Dynamic cross-correlation compares aligned Cα displacement vectors. Contact-change correlation compares how the number of Cα neighbors of each residue varies across frames."
+                  >Coupling method</label>
+                <select id="method">
+                  <option value="dcc">Displacement DCC</option>
+                  <option value="contacts">Contact-change correlation</option>
+                </select>
+              </div><details>
+              <summary>Advanced sampling and network settings</summary>
+              <div class="comm-field">
+                <label
+                  for="selection"
+                  data-help="MDAnalysis selection applied before extracting Cα atoms. Select the chains or segments present in the reference PDB. The app maps Cα atoms by residue identity, using chain or segment IDs to resolve repeats."
+                  >Topology selection</label>
+                <input id="selection" value="protein" />
+              </div>
+              
+              
+              <div class="field-grid">
+                <div class="comm-field">
+                  <label
+                    for="stride"
+                    data-help="Keep every nth saved frame, starting at frame 0. Use 1 for sampling controlled by Maximum frames alone. Increase stride for a fixed sampling interval when the cap does not bind. At least 20 frames must remain."
+                    >Frame stride</label>
+                  <input
+                    id="stride"
+                    type="number"
+                    min="1"
+                    max="1000000"
+                    value="10"
+                    required
+                  />
+                </div>
+                <div class="comm-field">
+                  <label
+                    for="maxFrames"
+                    data-help="Caps the frames used after applying stride. If the cap is exceeded, frames are sampled evenly across the remaining trajectory."
+                    >Maximum frames</label>
+                  <input
+                    id="maxFrames"
+                    type="number"
+                    min="20"
+                    max="10000"
+                    value="1000"
+                    required
+                  />
+                </div>
+                <div class="comm-field">
+                  <label
+                    for="cutoff"
+                    data-help="Two residues are in contact when their Cα distance is below this cutoff. Increasing it adds contacts and affects contact occupancy and contact-change correlation."
+                    >Cα cutoff (Å)</label>
+                  <input
+                    id="cutoff"
+                    type="number"
+                    min="2"
+                    max="25"
+                    step="0.1"
+                    value="8"
+                    required
+                  />
+                </div>
+                <div class="comm-field">
+                  <label
+                    for="occupancy"
+                    data-help="Minimum fraction of retained frames in which a pair must be in contact to form a network edge. A value of 0.6 means 60%. Higher values can disconnect paths."
+                    >Minimum occupancy</label>
+                  <input
+                    id="occupancy"
+                    type="number"
+                    min="0"
+                    max="1"
+                    step="0.01"
+                    value="0.6"
+                    required
+                  />
+                </div>
+                <div class="comm-field">
+                  <label
+                    for="coupling"
+                    data-help="Minimum correlation magnitude required for a network edge. Positive and negative correlations both count. Increasing this threshold can remove paths."
+                    >Minimum |coupling|</label>
+                  <input
+                    id="coupling"
+                    type="number"
+                    min="0"
+                    max="1"
+                    step="0.01"
+                    value="0.3"
+                    required
+                  />
+                </div>
+              </div>
+            <div class="comm-field">
+              <label
+                for="roleFunctional"
+                data-help="Residues used as the reference for pocket ranking. Leave this empty to rank against Region A. This choice affects pocket ranking only."
+                >Functional reference</label>
+              <select id="roleFunctional"></select>
+            <div id="functionalCustom"></div></div></details><small id="communicationFrameCount" role="status">Select a topology and trajectory to see the frame count.</small>
+            <details id="candidateSettings">
+              <summary>Candidate filters</summary>
+              <small
+                >Distance and reachability filter discovery when Region B is
+                empty.</small>
+              <div class="comm-field">
+                <label
+                  for="candidateFilter"
+                  data-help="Surface retains candidates at or above the SASA threshold. Buried retains candidates below it. When B is selected, SASA is still calculated and its filter is skipped."
+                  >Accessibility</label>
+                <select id="candidateFilter">
+                  <option value="all">All residues</option>
+                  <option value="surface">Surface · compute SASA</option>
+                  <option value="buried">Buried · compute SASA</option>
+                </select>
+              </div>
+              <div id="sasaSettings" hidden>
+                <div class="field-grid">
+                  <div class="comm-field">
+                    <label
+                      for="sasaThreshold"
+                      data-help="Mean heavy-atom solvent-accessible area per residue across sampled frames. This is an absolute area in Å²."
+                      >SASA threshold (Å²)</label>
+                    <input
+                      id="sasaThreshold"
+                      type="number"
+                      min="0"
+                      max="1000"
+                      step="any"
+                      value="25"
+                      required
+                    />
+                  </div>
+                  <div class="comm-field">
+                    <label
+                      for="sasaSnapshots"
+                      data-help="Number of frames spread across the retained trajectory for estimating SASA. More frames improve sampling and increase runtime."
+                      >SASA frames</label>
+                    <input
+                      id="sasaSnapshots"
+                      type="number"
+                      min="1"
+                      max="240"
+                      value="12"
+                      required
+                    />
+                  </div>
+                  <div class="comm-field">
+                    <label
+                      for="sasaPoints"
+                      data-help="Sphere points per heavy atom in the Shrake–Rupley calculation. More points improve geometric resolution. The water probe radius is 1.4 Å."
+                      >SASA sphere points</label>
+                    <input
+                      id="sasaPoints"
+                      type="number"
+                      min="32"
+                      max="960"
+                      value="120"
+                      required
+                    />
+                  </div>
+                </div>
+                <div class="comm-field">
+                  <label
+                    for="shielding"
+                    data-help="MDAnalysis selection for additional atoms that can shield analyzed residues. The analyzed residues always contribute their heavy atoms. The default protein includes neighboring protein chains."
+                    >Shielding selection</label>
+                  <input id="shielding" value="protein" />
+                </div>
+              </div>
+              <div class="comm-field">
+                <label
+                  for="minDistance"
+                  data-help="Minimum mean distance from a candidate Cα to the nearest Region A Cα in each retained frame. Raise it to focus on distal candidates."
+                  >Minimum distance from A (Å)</label>
+                <input
+                  id="minDistance"
+                  type="number"
+                  min="0"
+                  max="1000"
+                  step="any"
+                  value="0"
+                  required
+                />
+              </div>
+              <label class="check-field"
+                ><input type="checkbox" id="reachableOnly" /> Require a network
+                path from A</label>
+            </details>
+            <div id="communicationFrames" class="result-buttons" hidden>
+              <small id="communicationFramesSummary"></small>
+              <button type="button" id="clearCommunicationFrames">
+                Use full trajectory sampling
+              </button>
+            </div>
+            <button id="analyze" type="submit" class="primary">
+              Run communication analysis
+            </button>
+          </form>
+        </section>
+        <section
+          id="conformationPanel"
+          class="side-card"
+          hidden
+          aria-labelledby="conformationHeading"
+        >
+          <div class="panel-head">
+            <div>
+              <h2 id="conformationHeading">Conformations</h2>
+              <p>Find structural clusters, then measure observables.</p>
+            </div>
+          </div>
+          <form id="conformationForm" class="comm-form">
+            <div>
+              <button id="copyCommunication" type="button">
+                Use Communication inputs
+              </button>
+            </div>
+            <div class="comm-field">
+              <label for="confTopology">Topology path</label>
+              <div class="path-field">
+                <input
+                  id="confTopology"
+                  required
+                  placeholder="/path/to/system.psf"
+                />
+                <button
+                  type="button"
+                  hidden
+                  data-browse="confTopology"
+                  data-file-type="topology"
+                  data-other="confTrajectory"
+                  aria-label="Browse for conformation topology"
+                >
+                  Browse…
+                </button>
+              </div>
+            </div>
+            <div class="comm-field">
+              <label for="confTrajectory">Trajectory path</label>
+              <div class="path-field">
+                <input
+                  id="confTrajectory"
+                  required
+                  placeholder="/path/to/merged.dcd"
+                />
+                <button
+                  type="button"
+                  hidden
+                  data-browse="confTrajectory"
+                  data-file-type="trajectory"
+                  data-other="confTopology"
+                  aria-label="Browse for conformation trajectory"
+                >
+                  Browse…
+                </button>
+              </div>
+            </div>
+            <div class="comm-field">
+              <label
+                for="confBasis"
+                data-help="Cartesian PCA uses aligned Cα coordinates. Backbone dihedral PCA uses sine and cosine of φ/ψ. Contact-contact PCA uses paired distances between two atom selections, normalized by each frame’s mean paired distance."
+                >PCA representation</label>
+              <select id="confBasis">
+                <option value="cartesian">Cartesian Cα</option>
+                <option value="dihedral">Backbone φ/ψ dihedrals</option>
+                <option value="ccpca">Contact-contact PCA (ccPCA)</option>
+              </select>
+            </div>
+            <div id="ccpcaFields" class="comm-field" hidden>
+              <label for="ccpcaGroup1" data-help="Use MDAnalysis atom selection syntax. Atoms are paired in topology order after striding the larger group. Atom selections may include non-Cα atoms.">ccPCA group 1</label>
+              <input id="ccpcaGroup1" placeholder="segid PROA and not (name H*)" required />
+              <label for="ccpcaGroup2" data-help="Each feature is the distance between matching positions in the two strided groups, divided by the mean paired distance in that frame. Use a trajectory with both groups in the intended periodic image.">ccPCA group 2</label>
+              <input id="ccpcaGroup2" placeholder="segid PROB and not (name H*)" required />
+            </div>
+            <div class="comm-field">
+              <label
+                for="confClustering"
+                data-help="K-means and Ward use a requested number of clusters. DBSCAN finds dense groups and leaves sparse frames unassigned."
+                >Clustering method</label>
+              <select id="confClustering">
+                <option value="kmeans">k-means</option>
+                <option value="ward">Ward hierarchical</option>
+                <option value="dbscan">DBSCAN · density based</option>
+              </select>
+            </div>
+            <div class="field-grid">
+              
+              <div class="comm-field" id="confCountField">
+                <label
+                  for="confClusters"
+                  data-help="Requested number of structural groups. Cluster assignments depend on the chosen features, PCs and cluster count."
+                  >Clusters</label>
+                <input
+                  id="confClusters"
+                  type="number"
+                  min="2"
+                  max="24"
+                  value="4"
+                  required
+                />
+              </div>
+            </div>
+            
+            <details>
+              <summary>Advanced projection, clustering and sampling</summary>
+              <div class="comm-field">
+                <label for="confSelection">Topology selection</label><input id="confSelection" value="protein" />
+              </div>
+              <div class="comm-field" id="confFocusField">
+                <label
+                  for="confFocus"
+                  data-help="Residues that contribute features to PCA. Leave blank for all matched residues or enter IDs such as A:174-184."
+                  >PCA residues</label><input id="confFocus" placeholder="All matched residues" />
+              </div>
+              <div class="comm-field">
+                <label
+                  for="confFit"
+                  data-help="Cα residues used to align frames for Cartesian PCA, RMSD and the frame viewer. ccPCA distances are computed without alignment. Leave blank to fit all matched Cα atoms."
+                  >Alignment residues</label><input id="confFit" placeholder="All matched residues" />
+              </div>
+              <div class="field-grid">
+                <div class="comm-field">
+                  <label for="confStride" data-help="Keep every nth saved frame, starting at frame 0. Use 1 for sampling controlled by Maximum frames alone. Increase stride for a fixed sampling interval when the cap does not bind.">Frame stride</label><input
+                    id="confStride"
+                    type="number"
+                    min="1"
+                    max="1000000"
+                    value="10"
+                    required
+                  />
+                </div>
+                <div class="comm-field">
+                  <label for="confMax" data-help="If the strided list exceeds the cap, sample approximately evenly across that list. At least 20 frames must remain.">Maximum frames</label><input
+                    id="confMax"
+                    type="number"
+                    min="20"
+                    max="10000"
+                    value="1000"
+                    required
+                  />
+                </div>
+              </div>
+              
+            <div class="comm-field">
+                <label
+                  for="confComponents"
+                  data-help="Clustering uses this many leading PC scores, without scaling them to equal variance. The two axes you display can be changed after fitting."
+                  >PCs for clustering</label>
+                <input
+                  id="confComponents"
+                  type="number"
+                  min="2"
+                  max="20"
+                  value="3"
+                  required
+                />
+              </div><div class="field-grid" id="dbscanFields" hidden>
+              <div class="comm-field">
+                <label
+                  for="confEps"
+                  data-help="Neighborhood radius in PC space relative to the root-mean-square radius of the full projection. Lower values separate denser groups and may leave more frames unassigned."
+                  >Neighborhood radius (ε)</label>
+                <input
+                  id="confEps"
+                  type="number"
+                  min="0.001"
+                  max="10"
+                  step="any"
+                  value="0.25"
+                  required
+                />
+              </div>
+              <div class="comm-field">
+                <label
+                  for="confMinSamples"
+                  data-help="Number of retained frames, including the frame itself, required in a core neighborhood. Higher values require denser groups."
+                  >Minimum samples</label>
+                <input
+                  id="confMinSamples"
+                  type="number"
+                  min="2"
+                  max="10000"
+                  value="5"
+                  required
+                />
+              </div>
+            </div></details><small id="conformationFrameCount" role="status">Select a topology and trajectory to see the frame count.</small>
+            <button id="runConformations" type="submit" class="primary">
+              Run PCA and clustering
+            </button>
+          </form>
+        </section>
+        <section id="perturbationPanel" class="side-card" hidden>
+          <div class="panel-head"><h2>Perturbation–response scanning</h2></div>
+          <form id="perturbationForm" class="comm-form">
+            <div class="comm-field">
+              <label for="prsWorkflow">Analysis question</label>
+              <select id="prsWorkflow">
+                <option value="responders">What responds to this push?</option>
+                <option value="sources">Which pushes affect this region?</option>
+              </select>
+            </div>
+            <div id="prsRankingFields" hidden>
+              <div class="comm-field">
+                <label for="prsTargetScope" data-help="Choose the region to monitor. The app ranks pushes by their RMS response within this region, excluding self-response.">Region to monitor</label>
+                <select id="prsTargetScope"></select>
+              </div>
+              <div class="comm-field" id="prsTargetCustomField" hidden>
+                <label for="prsTarget" data-help="Enter residue numbers, ranges, or chain-qualified IDs such as A:85, A:91–94.">Custom region to monitor</label>
+                <input id="prsTarget" placeholder="A:85, A:91–94" />
+              </div>
+            </div>
+            <div class="comm-field">
+              <label for="prsScope" data-help="The model pushes each selected residue individually. Pick a pocket to see what moves when its lining residues are pushed, or choose all mapped residues to search broadly for effective sources.">Residues to perturb (sources)</label>
+              <select id="prsScope"></select>
+            </div>
+            <div class="comm-field" id="prsCustomField" hidden>
+              <label for="prsCustom" data-help="Enter residue numbers, ranges, or chain-qualified IDs such as A:40–57. Each listed residue is pushed separately.">Custom source residues</label>
+              <input id="prsCustom" placeholder="A:40, A:57" />
+            </div>
+            <details class="advanced-controls"><summary>Advanced model and reference settings</summary>
+            <div class="comm-field"><label for="prsCutoff" data-help="Maximum separation for an elastic spring between Cα atoms. Increasing it connects more pairs and can change the ranking.">Network cutoff (Å)</label><input id="prsCutoff" type="number" value="13" min="4" max="30" step="any" required /></div>
+            <div class="comm-field"><label for="prsReference" data-help="Use the loaded structure or a representative from the current clustering. PRS builds one elastic network from the selected conformation.">Reference conformation</label><select id="prsReference"></select></div></details>
+            
+            <button id="runPrs" class="primary">Run perturbation scan</button>
+          </form>
+        </section>
+      </div>
+      <section id="pocketTrackingResults" class="results results-card" aria-label="Pocket tracking results" hidden></section>
+      <section id="prsResults" class="results results-card" aria-label="Perturbation results" hidden></section>
+      <section
+        id="results"
+        class="results results-card"
+        aria-label="Communication results"
+        hidden
+      ></section>
+      <section
+        id="conformationResults"
+        class="results results-card"
+        aria-label="Conformation results"
+        hidden
+      >
+        <h3>Conformation results</h3>
+        <small id="conformationSummary"></small>
+        <section class="result-section" data-result-kind="plots"><h4>Plots</h4><div>
+            <div class="conformation-controls">
+              <label
+                >Conformation
+                <select id="clusterChoice"></select></label>
+              <label
+                >X axis
+                <select id="pcX"></select></label>
+              <label
+                >Y axis
+                <select id="pcY"></select></label>
+              <label id="observableColorLabel" hidden
+                ><input type="checkbox" id="observableColor" /> Color by
+                observable</label>
+            </div>
+            <div id="projectionPlot"></div>
+          </div><details id="landscapePanel" open>
+          <summary>PCA free-energy landscape</summary>
+          <form id="landscapeForm" class="conformation-controls conformation-actions">
+            <label
+              >Bins per axis
+              <input
+                id="landscapeBins"
+                type="number"
+                min="5"
+                max="128"
+                value="24"
+                required
+            /></label>
+            <label
+              >Temperature (K)
+              <input
+                id="landscapeTemperature"
+                type="number"
+                min="1"
+                max="10000"
+                step="any"
+                value="300"
+                required
+            /></label>
+            <label class="inline-checkbox" title="Interpolate the full display, assigning empty bins the highest sampled free energy for coloring. Raw counts stay available on hover.">
+              <input id="landscapeInterpolate" type="checkbox" checked />
+              Interpolate display
+            </label>
+            <button type="submit">Update landscape</button>
+          </form>
+          <div id="landscapePlot"></div>
+        </details></section><section class="result-section" data-result-kind="tables"><h4>Cluster table</h4><div id="clusterSummaryTable"></div></section><section class="result-section" data-result-kind="inspection"><h4>Frame inspection</h4><div class="viewer-card">
+            <div class="viewer-toolbar">
+              <div>
+                <strong id="frameTitle">Retained frame</strong><small id="frameStatus" role="status"></small>
+              </div>
+              <div class="actions compact frame-actions">
+                <button type="button" id="representative">
+                  Show representative</button><button type="button" id="useFrameForPockets" disabled
+                  title="Use this aligned frame as the reference structure for Pocket discovery. This replaces the current reference and clears its analysis results.">
+                  Use for pockets</button><button type="button" id="exportFrame" disabled>
+                  Export frame PDB
+                </button>
+              </div>
+            </div>
+            <small id="frameActionStatus" class="frame-action-status" role="status" hidden></small>
+            <form id="frameHighlightForm" class="viewer-export">
+              <label for="frameHighlights">Highlight residues</label>
+              <input id="frameHighlights" placeholder="e.g. A:40, A:174-184" />
+              <button type="submit">Highlight</button>
+              <button type="button" id="copyHighlights">
+                Use main highlights
+              </button>
+              <small id="frameHighlightStatus" role="status"></small>
+            </form>
+            <div class="viewer-export">
+              <label><input id="frameResidueLabels" type="checkbox" checked /> Residue labels</label>
+              <button type="button" id="exportFrameVmd" disabled>
+                Export VMD
+              </button>
+              <button type="button" id="exportFramePymol" disabled>
+                Export PyMOL
+              </button>
+            </div>
+            <div class="viewport frame-viewport">
+              <div id="frameMolecule" aria-label="Trajectory frame in 3D"></div>
+              <div id="frameViewKey" class="view-key"></div>
+            </div>
+          </div></section>
+        <div class="result-buttons">
+          <button type="button" id="sendFrames">
+            Use cluster frames in Communication
+          </button>
+          <button type="button" id="exportConformations">
+            Export frames CSV
+          </button>
+        </div>
+        <small id="clusterSummary"></small>
+        <details id="contactComparison" hidden>
+          <summary>Compare state contacts</summary>
+          <form id="stateContactForm" class="comm-form">
+            <div class="field-grid">
+              <div class="comm-field"><label for="contactStateA">State A</label><select id="contactStateA"></select></div>
+              <div class="comm-field"><label for="contactStateB">State B</label><select id="contactStateB"></select></div>
+              <div class="comm-field">
+                <label for="contactScopeA">Residue group 1</label>
+                <select id="contactScopeA"></select>
+                <input id="contactGroupA" aria-label="Custom residues for group 1" placeholder="e.g. A:40, A:174-184" hidden />
+              </div>
+              <div class="comm-field">
+                <label for="contactScopeB">Residue group 2</label>
+                <select id="contactScopeB"></select>
+                <input id="contactGroupB" aria-label="Custom residues for group 2" placeholder="e.g. A:40, A:174-184" hidden />
+              </div>
+              <div class="comm-field"><label for="stateContactCutoff">Cα cutoff (Å)</label><input id="stateContactCutoff" type="number" value="8" min="2" max="25" step="any" required /></div>
+            </div>
+            <div class="result-buttons conformation-actions">
+              <button id="copyContactRegions" type="button">Use Communication regions</button>
+              <label class="inline-checkbox"><input id="contactUsePath" type="checkbox" /> Only edges on the selected path</label>
+              <button id="runStateContacts" class="primary">Compare contacts</button>
+            </div>
+          </form>
+          <div id="stateContactResults" class="results"></div>
+          <p class="empty-hint">Choose two assigned clusters and compare contacts to inspect changes between states.</p>
+        </details>
+        
+        <form id="observableForm" class="comm-form observable-form">
+          <h4>Trajectory observable</h4>
+          <div class="comm-field">
+            <label
+              for="observableKind"
+              data-help="Measure the same observable on every retained frame, then compare its distribution across the selected cluster and the retained ensemble."
+              >Measure</label>
+            <select id="observableKind">
+              <option value="minimum">Minimum heavy-atom distance</option>
+              <option value="center">Distance between geometric centers</option>
+              <option value="contacts">Heavy-atom contact count</option>
+              <option value="angle">Angle between three group centers</option>
+              <option value="dihedral">
+                Dihedral between four group centers
+              </option>
+              <option value="rmsd">Cα RMSD to the reference structure</option>
+              <option value="sasa">Solvent-accessible surface area (SASA)</option>
+              <option value="rg">Radius of gyration</option>
+              <option value="imported">Import frame/value CSV</option>
+              <option value="pc">Principal component score</option>
+            </select>
+          </div>
+          <div class="comm-field" id="observablePCField" hidden>
+            <label
+              for="observablePC"
+              data-help="Use a score from the current PCA as a per-frame observable. Because these PCs define the clusters, their between-cluster differences are descriptive."
+              >Principal component</label>
+            <select id="observablePC"></select>
+          </div>
+          <div id="observableGroups" class="field-grid"></div>
+          <small id="observableSasaHelp" hidden>Sum the solvent-accessible area of the selected residues in Å² for every retained frame. The surrounding protein shields the selected residues.</small>
+          <small id="observableRgHelp" hidden>Measure the mass-weighted radius of gyration in Å about the selected atoms’ center of mass for each retained frame.</small>
+          <div class="comm-field" id="observableCutoffField" hidden>
+            <label for="observableCutoff">Contact cutoff (Å)</label>
+            <input
+              id="observableCutoff"
+              type="number"
+              min="0.1"
+              max="50"
+              step="any"
+              value="4.5"
+            />
+          </div>
+          <div class="comm-field" id="observableCsvField" hidden>
+            <label for="observableCsv">CSV with frame,value columns</label>
+            <div class="path-field">
+              <input id="observableCsv" placeholder="/path/to/values.csv" />
+              <button
+                type="button"
+                hidden
+                data-browse="observableCsv"
+                data-file-type="csv"
+                data-other="confTrajectory"
+                aria-label="Browse for observable CSV"
+              >
+                Browse…
+              </button>
+            </div>
+            <small
+              >Use zero-based trajectory frame indices. Include a value for
+              every retained frame.</small>
+          </div>
+          <div>
+            <button type="submit" id="runObservable" class="primary">
+              Calculate observable
+            </button>
+          </div>
+        </form>
+        <div id="observableComparisonControls" hidden>
+          <div class="field-heading">
+            <label
+              for="observableCompare"
+              data-help="Run pairwise Welch tests on cluster means with Holm adjustment. Frame spacing can vary. For defensible p-values the observations must be independent, so treat framewise results from correlated trajectories as exploratory. PC scores and circular observables are summarized descriptively."
+              >Test cluster differences</label>
+            <input id="observableCompare" type="checkbox" />
+          </div>
+        </div>
+        <div id="observableResults" hidden></div>
+        <p class="empty-hint">Choose an observable and residue groups, then calculate it to compare frame values and cluster distributions.</p>
+        <section
+          id="associationPanel"
+          hidden
+          aria-labelledby="associationHeading"
+        >
+          <form id="associationForm" class="comm-form observable-form">
+            <h4 id="associationHeading">Residue–observable association</h4>
+            <div class="field-grid">
+              <div class="comm-field">
+                <label
+                  for="associationFeature"
+                  data-help="Correlate the observable with each residue’s frame-by-frame feature using Spearman rank correlation. Distance uses the nearest Cα in a reference region. Neighbor count measures local packing. Displacement measures how far each Cα moves after alignment. SASA measures how much of each residue is solvent-exposed."
+                  >Per-residue feature</label>
+                <select id="associationFeature">
+                  <option value="distance">
+                    Minimum Cα distance to a reference region
+                  </option>
+                  <option value="contacts">Cα neighbor count</option>
+                  <option value="sasa">
+                    Per-residue solvent-accessible area (SASA)
+                  </option>
+                  <option value="displacement">
+                    Aligned Cα displacement from reference
+                  </option>
+                </select>
+              </div>
+              <div class="comm-field">
+                <label
+                  for="associationScope"
+                  data-help="Use all retained frames or only the selected assigned cluster. Ranking requires at least 20 frames and a varying observable."
+                  >Frames</label>
+                <select id="associationScope">
+                  <option value="all">All retained frames</option>
+                  <option value="cluster">Selected cluster</option>
+                </select>
+              </div>
+            </div>
+            <div class="comm-field" id="associationReferenceField">
+              <label
+                for="associationReference"
+                data-help="Enter residue IDs or copy Region A. The shortest Cα distance to this group is computed per frame. Residues in the reference group are excluded from this ranking."
+                >Distance reference residues</label>
+              <div class="path-field">
+                <input
+                  id="associationReference"
+                  placeholder="e.g. A:40, A:78, A:158"
+                  required
+                />
+                <button type="button" id="associationUseRegionA">
+                  Use Region A
+                </button>
+              </div>
+            </div>
+            
+            
+            
+            <details class="advanced-controls"><summary>Advanced feature and exclusion settings</summary><div class="comm-field" id="associationCutoffField" hidden>
+              <label
+                for="associationCutoff"
+                data-help="Count other Cα nodes strictly within this distance in each frame. A residue with a constant count has an undefined Spearman correlation."
+                >Cα contact cutoff (Å)</label>
+              <input
+                id="associationCutoff"
+                type="number"
+                min="0.1"
+                max="50"
+                step="any"
+                value="8"
+                required
+              />
+            </div><div class="comm-field" id="associationSasaField" hidden>
+              <label
+                for="associationSasaFrames"
+                data-help="SASA uses a 1.4 Å probe and 120 points per heavy atom. Above this limit, frames are sampled at evenly spaced positions in the selected frame list, and each area is paired with the observable from the same frame. Cluster frames may be unevenly spaced in time."
+                >Maximum SASA frames</label>
+              <input
+                id="associationSasaFrames"
+                type="number"
+                min="20"
+                max="10000"
+                value="100"
+                required
+              />
+            </div><label class="check-field"
+              ><input id="associationExclude" type="checkbox" checked /> Exclude
+              residues used to define the observable</label></details><div>
+              <button type="submit" class="primary">Rank residues</button>
+            </div>
+            <small id="associationStatus" role="status"></small>
+          </form>
+          <div id="associationResults" hidden></div>
+          <p class="empty-hint">Calculate an observable first, then rank residue features to explore associations and select residues in the frame viewer.</p>
+        </section>
+      </section>
+      <footer>
+        Pockets are candidate binding sites. Coupling and network paths describe
+        associations in the sampled ensemble.
+      </footer>
+    </main>
+    <dialog id="serverFileDialog" aria-labelledby="serverFileTitle">
+      <h3 id="serverFileTitle">Browse server files</h3>
+      <form id="serverFolderForm">
+        <label for="serverFolder">Server directory</label>
+        <div class="path-field">
+          <input id="serverFolder" autocomplete="off" spellcheck="false" />
+          <button type="submit">Go</button>
+          <button id="serverFolderUp" type="button">Up</button>
+        </div>
+      </form>
+      <p id="serverFileStatus" role="status" aria-live="polite"></p>
+      <div id="serverFileEntries" aria-label="Folders and files"></div>
+      <form method="dialog"><button>Cancel</button></form>
+    </dialog>
+    <dialog id="aboutDialog" class="about-dialog" aria-labelledby="aboutTitle">
+      <div class="dialog-heading"><h2 id="aboutTitle">About Allosteric Explorer</h2><button id="closeAbout" type="button" aria-label="Close About">×</button></div>
+      <p>Version <strong id="aboutVersion">1.0.0</strong></p>
+      <p>Explore protein pockets, residue communication, conformational states, and elastic-network perturbation responses.</p>
+      <p>Suggested software citation: Geist N. <em>Allosteric Explorer</em>, version 1.0.0 (2026). Cite the underlying methods used in your analysis.</p>
+      <p><a href="/api/methods" target="_blank" rel="noopener">Open Methods and methodological references</a></p>
+      <details open><summary>Residue selection syntax</summary>
+        <p>Simple IDs still work: <code>A:40, PROA:158-170</code>. A qualifier can identify a chain, segid, or <code>chain/segid</code>.</p>
+        <p><code>segid PROA and resid 40:60</code></p>
+        <p><code>(chain A or chain B) and not resname GLY</code></p>
+        <p><code>segid "PRO A" and (resid 40 or resid 85:95)</code></p>
+        <p>Supported fields: chain, segid, resid, resname, protein/all. Precedence: not → and → or. Quoted names and * / ? name wildcards are supported. These are residue-level selections; topology atom-selection fields use MDAnalysis syntax.</p>
+      </details>
+      <details><summary>Structural ions and model scope</summary><p>Recognized monatomic ions from the first reference PDB model are retained; recognition does not establish a structural or functional role. They can be shown as labeled spheres. Nearby ions are reported within 5 Å of pocket beads. Protein-only fpocket geometry does not account for ion occupancy. Communication and PRS remain Cα protein models; ion-mediated coupling is not explicitly calculated. Trajectory frames display only coordinates reconstructed from the mapped trajectory residues, so static reference ions are not overlaid on moving frames.</p></details>
+      <p>The banner illustrations do not show your analysis results.</p>
+    </dialog>
+  </body>
+</html>
